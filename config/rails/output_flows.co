@@ -1,0 +1,28 @@
+# Output Rails - Response Quality and Compliance Checking
+# These flows validate and format bot responses
+
+define flow check response quality
+  """Ensure response meets quality standards"""
+  $quality_check = execute check_response_quality(bot_response=$bot_response)
+  
+  if not $quality_check.meets_standards
+    # Regenerate response with quality improvements
+    $improved_response = execute improve_response_quality(original_response=$bot_response, quality_issues=$quality_check.issues)
+    $bot_response = $improved_response.content
+
+define flow ensure compliance
+  """Ensure response complies with financial regulations"""
+  $compliance_check = execute check_compliance(bot_response=$bot_response)
+  
+  if $compliance_check.requires_disclaimer
+    $bot_response = $bot_response + $compliance_check.disclaimer
+  
+  if not $compliance_check.is_compliant
+    bot refuse to respond
+    bot "I apologize, but I cannot provide that information as it may not comply with our regulatory requirements. Please contact our compliance team for assistance with this matter."
+    stop
+
+define flow format response
+  """Format response for consistency and professionalism"""
+  $formatted_response = execute format_bot_response(response=$bot_response)
+  $bot_response = $formatted_response.content

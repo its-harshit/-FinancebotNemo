@@ -1,0 +1,27 @@
+# Input Rails - User Intent Classification and Input Validation
+# These flows process incoming user messages
+
+define flow check user intent
+  """Classify user intent and route appropriately"""
+  $intent = execute classify_user_intent(user_message=$user_message)
+  
+  if $intent.category == "off_topic"
+    $redirect = execute handle_off_topic_request(user_message=$user_message)
+    bot $redirect.response
+    stop
+
+define flow validate input
+  """Validate user input for security and compliance"""
+  $validation = execute validate_user_input(user_message=$user_message)
+  
+  if not $validation.is_valid
+    bot refuse to respond
+    stop
+
+define flow check for sensitive information
+  """Detect and handle sensitive information in user input"""
+  $sensitive_check = execute check_for_sensitive_info(user_message=$user_message)
+  
+  if $sensitive_check.contains_sensitive_data
+    bot "I notice your message may contain sensitive information like account numbers or personal details. For your security, please avoid sharing such information in chat. I can still help you with your request using your account ID or other non-sensitive identifiers."
+    stop

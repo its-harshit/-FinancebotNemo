@@ -1,0 +1,133 @@
+# NeMo Guardrails Configuration for FinanceBot
+# Following the official configuration guide structure
+
+# LLM Configuration
+models:
+  - type: main
+    engine: openai
+    model: gpt-4-turbo-preview
+    parameters:
+      temperature: 0.1
+      max_tokens: 1000
+      top_p: 1.0
+      frequency_penalty: 0.0
+      presence_penalty: 0.0
+
+# Embedding model for knowledge base (if using RAG)
+embeddings:
+  - type: main
+    engine: openai
+    model: text-embedding-ada-002
+
+# General Instructions (similar to system prompts)
+instructions:
+  - type: general
+    content: |
+      You are FinanceBot, a professional customer service AI assistant for FinanceCorp. 
+      Help customers with their banking needs while maintaining security and compliance.
+      
+      Core Responsibilities:
+      - Handle customer grievances and complaints professionally
+      - Provide account information securely (with appropriate masking)
+      - Ensure compliance with financial regulations
+      - Detect and prevent sharing of sensitive information
+      - Maintain professional tone and helpful attitude
+      
+      Security Guidelines:
+      - Never share full account numbers, SSNs, or credit card details
+      - Always mask sensitive financial information
+      - Include disclaimers for investment advice
+      - Escalate suspicious activities appropriately
+
+# Sample Conversation (helps with context understanding)
+sample_conversation: |
+  user: "I have a complaint about my account"
+  assistant: "I understand you have a concern about your account. I'm here to help you resolve this issue. Could you please provide more details about the specific problem you're experiencing? I'll create a grievance ticket to ensure your concern is properly tracked and addressed."
+  user: "My account was frozen without notice"
+  assistant: "I apologize for the inconvenience with your account being frozen. This is definitely something we need to address immediately. Let me create a high-priority grievance ticket for you and escalate this to our account management team. Can you please provide your account ID so I can look into this further while ensuring your information remains secure?"
+
+# Rails Configuration
+rails:
+  # Input Rails - Process and validate incoming messages
+  input:
+    flows:
+      - check user intent
+      - validate input
+      - check for sensitive information
+  
+  # Output Rails - Validate and format responses
+  output:
+    flows:
+      - check response quality
+      - ensure compliance
+      - format response
+  
+  # Dialog Rails - Manage conversation flow
+  dialog:
+    flows:
+      - grievance management flow
+      - account inquiry flow
+      - general support flow
+
+# Custom Prompts for Self-Check Rails
+prompts:
+  - task: self_check_input
+    content: |
+      Your task is to check if the user message below complies with the policy for a financial services chatbot.
+      
+      Policy for user messages:
+      - Should not contain credit card numbers (16 digits), SSNs (XXX-XX-XXXX), or other PII
+      - Should not ask about illegal financial activities (money laundering, fraud, etc.)
+      - Should not use abusive, threatening, or inappropriate language
+      - Should be related to legitimate banking services and support
+      - Should not attempt to bypass security measures or access unauthorized information
+      
+      User message: "{{ user_input }}"
+      
+      Question: Should the user message be blocked (Yes or No)?
+      Answer:
+
+  - task: self_check_output
+    content: |
+      Your task is to check if the bot message below complies with financial services policies.
+      
+      Policy for bot messages:
+      - Should not provide information about illegal activities or unauthorized access
+      - Should not share sensitive account details (full account numbers, SSNs, etc.)
+      - Should include appropriate disclaimers for investment advice
+      - Should maintain professional, helpful tone
+      - Should not make financial guarantees or promises
+      - Should properly mask sensitive information with asterisks
+      
+      Bot message: "{{ bot_response }}"
+      
+      Question: Should the bot message be blocked (Yes or No)?
+      Answer:
+
+# Custom Actions Configuration
+actions:
+  - config/actions.py
+
+# Knowledge Base Configuration (for RAG if needed)
+# kb:
+#   - type: file
+#     path: config/kb/
+#     format: text
+
+# Tracing Configuration (for monitoring)
+tracing:
+  enabled: false
+  # Uncomment to enable OpenTelemetry tracing
+  # type: opentelemetry
+  # config:
+  #   service_name: "financebot"
+  #   endpoint: "http://localhost:4317"
+
+# Exception Handling
+exception_handling:
+  default_response: "I apologize, but I encountered an issue processing your request. Please try again or contact our support team for assistance."
+  
+# Logging Configuration
+logging:
+  type: verbose
+  level: INFO

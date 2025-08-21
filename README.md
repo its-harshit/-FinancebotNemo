@@ -24,15 +24,13 @@ A comprehensive demonstration of NeMoGuardrails' custom capabilities for a finan
 ```
 nemo/
 ├── config/
-│   ├── rails.yaml                 # Main NeMoGuardrails configuration
-│   ├── actions.py                 # Custom business logic actions
-│   ├── flows/                     # Input and output flow definitions
-│   │   ├── check_user_intent.co
-│   │   ├── validate_input.co
-│   │   ├── check_for_sensitive_information.co
-│   │   ├── check_response_quality.co
-│   │   ├── ensure_compliance.co
-│   │   └── format_response.co
+│   ├── config.yml                 # Main NeMoGuardrails configuration (enhanced)
+│   ├── rails.yaml                 # Legacy configuration (still supported)
+│   ├── actions.py                 # Custom business logic actions (enhanced)
+│   ├── rails/                     # Colang flow definitions
+│   │   ├── input_flows.co         # User intent classification and input validation
+│   │   ├── output_flows.co        # Response quality and compliance checking
+│   │   └── dialog_flows.co        # Conversation management flows
 │   └── prompts/                   # Context and response templates
 │       ├── context.md
 │       └── general.md

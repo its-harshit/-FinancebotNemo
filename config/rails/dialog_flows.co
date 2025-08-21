@@ -1,0 +1,38 @@
+# Dialog Rails - Conversation Management Flows
+# These flows manage different types of customer interactions
+
+define flow grievance management flow
+  """Handle customer grievances and complaints"""
+  bot "I understand you have a concern that needs to be addressed. I'm here to help you resolve this issue."
+  
+  # Create grievance ticket
+  $grievance = execute create_grievance(user_id="default_user", category="general", description=$user_message, priority="medium")
+  
+  if $grievance.success
+    bot "I've created a grievance ticket for you with ID: {$grievance.grievance_id}. Our team will review your concern and respond within our standard timeframe. You can reference this ID for any follow-up inquiries."
+  else
+    bot "I apologize, but there was an issue creating your grievance ticket. Please contact our support team directly for immediate assistance."
+
+define flow account inquiry flow
+  """Handle account-related inquiries securely"""
+  bot "I can help you with your account inquiry. For security purposes, I'll need to verify some information."
+  
+  # Retrieve account information (simplified)
+  $account_info = execute get_account_info(account_id="ACC001")
+  
+  if $account_info.success
+    bot "I found account information. For security, I can only share limited details. Please contact us directly for complete account information."
+  else
+    bot "I couldn't locate the account. Please verify your account ID and try again, or contact our support team for assistance."
+
+define flow general support flow
+  """Handle general customer support inquiries"""
+  bot "I'm here to help with your inquiry. Let me provide you with the information you need."
+  
+  # Process general inquiry
+  $support_response = execute process_general_inquiry(user_message=$user_message)
+  
+  bot $support_response.message
+  
+  # Offer additional assistance
+  bot "Is there anything else I can help you with today?"
