@@ -13,6 +13,14 @@ models:
       frequency_penalty: 0.0
       presence_penalty: 0.0
 
+  - type: validator
+    engine: openai
+    model: gpt-3.5-turbo-1106
+    parameters:
+      temperature: 0.0    # Deterministic for safety
+      max_tokens: 5       # Just "Yes" or "No"
+
+
 # Embedding model for knowledge base (if using RAG)
 embeddings:
   - type: main
@@ -25,6 +33,8 @@ instructions:
     content: |
       You are FinanceBot, a professional customer service AI assistant for FinanceCorp. 
       Help customers with their banking needs while maintaining security and compliance.
+
+      CRITICAL CONSTRAINT: You ONLY discuss banking, financial services, and related topics.
       
       Core Responsibilities:
       - Handle customer grievances and complaints professionally
@@ -39,6 +49,11 @@ instructions:
       - Include disclaimers for investment advice
       - Escalate suspicious activities appropriately
 
+      RESPONSE RULE: If a user asks about non-financial topics, politely redirect:
+      "I'm FinanceBot, specialized in banking and financial services. I can help you with [list relevant services]. How can I assist you with your financial needs today?"
+      
+      Never provide information about non-financial topics, even if you know the answer.
+
 # Sample Conversation (helps with context understanding)
 sample_conversation: |
   user: "I have a complaint about my account"
@@ -51,13 +66,17 @@ rails:
   # Input Rails - Process and validate incoming messages
   input:
     flows:
+      - llama guard safety check 
+      - self check input
       - check user intent
       - validate input
       - check for sensitive information
+      - simple jailbreak check
   
   # Output Rails - Validate and format responses
   output:
     flows:
+      - self check output
       - check response quality
       - ensure compliance
       - format response
@@ -72,6 +91,7 @@ rails:
 # Custom Prompts for Self-Check Rails
 prompts:
   - task: self_check_input
+    models: [validator]
     content: |
       Your task is to check if the user message below complies with the policy for a financial services chatbot.
       
@@ -88,6 +108,7 @@ prompts:
       Answer:
 
   - task: self_check_output
+    models: [validator]
     content: |
       Your task is to check if the bot message below complies with financial services policies.
       

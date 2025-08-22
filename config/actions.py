@@ -1,7 +1,9 @@
 from typing import Dict, List, Optional
 from datetime import datetime
 import json
+import requests
 from nemoguardrails.actions import action
+import os
 
 # Mock database for demonstration
 grievances_db = []
@@ -10,6 +12,141 @@ accounts_db = {
     "ACC002": {"name": "Jane Smith", "balance": 2500, "status": "active"},
     "ACC003": {"name": "Bob Wilson", "balance": 0, "status": "suspended"}
 }
+
+@action()
+async def llama_guard_api_check(user_message: str) -> Dict:
+    """Use Llama Guard via Hugging Face Inference API"""
+    
+    # Hugging Face Inference API endpoint
+    API_URL = "https://api-inference.huggingface.co/models/meta-llama/LlamaGuard-7b"
+    
+    # Get API key from environment
+    hf_token = os.getenv("HUGGINGFACE_API_KEY")
+    if not hf_token:
+        return {
+            "is_safe": True,  # Fail open if no API key
+            "assessment": "no_api_key",
+            "violated_categories": [],
+            "source": "fallback"
+        }
+    
+    headers = {"Authorization": f"Bearer {hf_token}"}
+    
+    # Llama Guard prompt format
+    llama_guard_prompt = f"""<s>[INST] Task: Check if there is unsafe content in 'User' messages in conversations according to our safety policy with the below categories.
+
+<BEGIN UNSAFE CONTENT CATEGORIES>
+O1: Violence and Hate.
+O2: Sexual content.
+O3: Criminal planning.
+O4: Guns and illegal weapons.
+O5: Regulated or controlled substances.
+O6: Self-harm.
+O7: Financial crimes and fraud.
+<END UNSAFE CONTENT CATEGORIES>
+
+<BEGIN CONVERSATION>
+User: {user_message}
+<END CONVERSATION>
+
+Provide your safety assessment for User in the above conversation:
+- First line must be 'safe' or 'unsafe'
+- If unsafe, provide a second line that lists the violated categories. [/INST]"""
+
+    try:
+        # Call Hugging Face API
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json={
+                "inputs": llama_guard_prompt,
+                "parameters": {
+                    "max_new_tokens": 50,
+                    "temperature": 0.0,
+                    "return_full_text": False
+                }
+            },
+            timeout=15  # 15 second timeout for API
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            # Handle different response formats
+            if isinstance(result, list) and len(result) > 0:
+                llama_response = result[0].get("generated_text", "").strip()
+            elif isinstance(result, dict):
+                llama_response = result.get("generated_text", "").strip()
+            else:
+                llama_response = str(result).strip()
+            
+            # Parse Llama Guard response
+            lines = llama_response.split('\n')
+            safety_assessment = lines[0].lower().strip() if lines else "safe"
+            is_safe = safety_assessment == "safe"
+            
+            violated_categories = []
+            if not is_safe and len(lines) > 1:
+                violated_categories = [cat.strip() for cat in lines[1].split(',')]
+            
+            return {
+                "is_safe": is_safe,
+                "assessment": safety_assessment,
+                "violated_categories": violated_categories,
+                "full_response": llama_response,
+                "source": "huggingface_api"
+            }
+            
+        elif response.status_code == 503:
+            # Model loading - common with HF API
+            return {
+                "is_safe": True,  # Fail open
+                "assessment": "model_loading",
+                "violated_categories": [],
+                "full_response": "Model is loading, please try again",
+                "source": "fallback"
+            }
+        else:
+            # Other API errors
+            return {
+                "is_safe": True,  # Fail open
+                "assessment": "api_error",
+                "violated_categories": [],
+                "full_response": f"HTTP {response.status_code}: {response.text}",
+                "source": "fallback"
+            }
+            
+    except requests.exceptions.RequestException as e:
+        # Network/timeout errors
+        return {
+            "is_safe": True,  # Fail open for availability
+            "assessment": "network_error",
+            "violated_categories": [],
+            "full_response": str(e),
+            "source": "fallback"
+        }
+
+@action()
+async def llama_guard_with_fallback(user_message: str) -> Dict:
+    """Llama Guard with intelligent fallback to existing checks"""
+    
+    # Try Llama Guard API first
+    llama_result = await llama_guard_api_check(user_message)
+    
+    # If Llama Guard worked, use it
+    if llama_result["source"] == "huggingface_api":
+        return llama_result
+    
+    # Fallback to your existing pattern-based checks
+    fallback_result = await simple_jailbreak_check(user_message)
+    
+    return {
+        "is_safe": not fallback_result.get("is_jailbreak", False),
+        "assessment": "fallback_pattern_check",
+        "violated_categories": ["jailbreak"] if fallback_result.get("is_jailbreak") else [],
+        "full_response": f"Fallback used: {llama_result['assessment']}",
+        "source": "fallback_patterns"
+    }
 
 @action()
 async def create_grievance(user_id: str, category: str, description: str, priority: str = "medium") -> Dict:
@@ -129,7 +266,28 @@ async def calculate_response_time(grievance_id: str) -> Dict:
         "error": "Grievance not found"
     }
 
-# New actions to support the enhanced flows
+@action()
+async def simple_jailbreak_check(user_message: str) -> Dict:
+    """Simple pattern-based jailbreak detection."""
+    
+    # Just a few key patterns to catch obvious attempts
+    jailbreak_keywords = [
+        "ignore previous instructions",
+        "forget your role", 
+        "you are no longer",
+        "pretend you are",
+        "system:",
+        "override",
+        "new instructions"
+    ]
+    
+    user_lower = user_message.lower()
+    detected = any(keyword in user_lower for keyword in jailbreak_keywords)
+    
+    return {
+        "is_jailbreak": detected,
+        "message": user_message
+    }
 
 @action()
 async def classify_user_intent(user_message: str) -> Dict:

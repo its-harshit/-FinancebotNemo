@@ -1,6 +1,16 @@
 # Input Rails - User Intent Classification and Input Validation
 # These flows process incoming user messages
 
+
+define flow llama guard safety check
+  """Llama Guard safety check with API fallback"""
+  $safety_check = execute llama_guard_with_fallback(user_message=$user_message)
+  
+  if not $safety_check.is_safe
+    bot refuse to respond
+    bot "I cannot assist with that request as it may violate our safety guidelines. If you believe this is an error, please rephrase your question."
+    stop
+
 define flow check user intent
   """Classify user intent and route appropriately"""
   $intent = execute classify_user_intent(user_message=$user_message)
@@ -24,4 +34,12 @@ define flow check for sensitive information
   
   if $sensitive_check.contains_sensitive_data
     bot "I notice your message may contain sensitive information like account numbers or personal details. For your security, please avoid sharing such information in chat. I can still help you with your request using your account ID or other non-sensitive identifiers."
+    stop
+
+define flow simple jailbreak check
+  """Simple jailbreak detection"""
+  $check = execute simple_jailbreak_check(user_message=$user_message)
+  
+  if $check.is_jailbreak
+    bot "I'm designed to help with banking and financial services. Please ask questions related to your accounts or banking needs."
     stop
