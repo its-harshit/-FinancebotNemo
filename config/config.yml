@@ -3,22 +3,30 @@
 
 # LLM Configuration
 models:
+  # - type: main
+  #   engine: openai
+  #   model: gpt-4-turbo-preview
+  #   parameters:
+  #     temperature: 0.1
+  #     max_tokens: 1000
+  #     top_p: 1.0
+  #     frequency_penalty: 0.0
+  #     presence_penalty: 0.0
+
   - type: main
     engine: openai
-    model: gpt-4-turbo-preview
+    # base_url: "http://127.0.0.1:8000/" 
+    model: "NPCI_Greviance"
     parameters:
-      temperature: 0.1
-      max_tokens: 1000
-      top_p: 1.0
-      frequency_penalty: 0.0
-      presence_penalty: 0.0
+      base_url: http://127.0.0.1:8000/v1
+      api_key: "api-key"  
 
-  - type: validator
-    engine: openai
-    model: gpt-3.5-turbo-1106
-    parameters:
-      temperature: 0.0    # Deterministic for safety
-      max_tokens: 5       # Just "Yes" or "No"
+  # - type: validator
+  #   engine: openai
+  #   model: gpt-3.5-turbo-1106
+  #   parameters:
+  #     temperature: 0.0    # Deterministic for safety
+  #     max_tokens: 5       # Just "Yes" or "No"
 
 
 # Embedding model for knowledge base (if using RAG)
@@ -91,7 +99,8 @@ rails:
 # Custom Prompts for Self-Check Rails
 prompts:
   - task: self_check_input
-    models: [validator]
+    # models: [validator]
+    models: [main]
     content: |
       Your task is to check if the user message below complies with the policy for a financial services chatbot.
       
@@ -108,7 +117,8 @@ prompts:
       Answer:
 
   - task: self_check_output
-    models: [validator]
+    # models: [validator]
+    models: [main]
     content: |
       Your task is to check if the bot message below complies with financial services policies.
       
