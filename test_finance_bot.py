@@ -1,15 +1,15 @@
 import pytest
 import asyncio
 from typing import Dict, Any
-from finance_bot import FinanceBot
+from finance_bot import NPCIGrievanceBot
 
-class TestFinanceBot:
-    """Comprehensive test suite for FinanceBot with NeMoGuardrails."""
+class TestNPCIGrievanceBot:
+    """Comprehensive test suite for NPCIGrievanceBot with NeMoGuardrails."""
     
     @pytest.fixture
     async def bot(self):
-        """Initialize the FinanceBot for testing."""
-        return FinanceBot()
+        """Initialize the NPCIGrievanceBot for testing."""
+        return NPCIGrievanceBot()
     
     @pytest.mark.asyncio
     async def test_grievance_creation(self, bot):
@@ -292,6 +292,54 @@ async def run_comprehensive_demo():
     
     print("🎉 Comprehensive demo completed successfully!")
 
+async def test_streaming_functionality():
+    """Test streaming functionality separately."""
+    print("\n🔄 Testing Streaming Functionality...")
+    bot = NPCIGrievanceBot()
+    
+    # Test 1: Basic streaming
+    print("\n📡 Test 1: Basic streaming")
+    test_message = "My UPI payment failed but money was debited"
+    chunks_received = []
+    
+    try:
+        async for chunk in bot.stream_message(test_message, "streaming_test_user"):
+            chunks_received.append(chunk)
+            print(f"📦 Chunk: {chunk[:50]}..." if len(chunk) > 50 else f"📦 Chunk: {chunk}")
+            
+        full_response = "".join(chunks_received)
+        print(f"✅ Streaming test: Received {len(chunks_received)} chunks")
+        print(f"📝 Full response length: {len(full_response)} characters")
+        
+    except Exception as e:
+        print(f"⚠️  Streaming test error: {e}")
+    
+    # Test 2: Streaming with context
+    print("\n🧠 Test 2: Streaming with context")
+    conversation_history = [
+        {"role": "user", "content": "I have a UPI issue"},
+        {"role": "assistant", "content": "I can help you with UPI issues. What specific problem are you facing?"}
+    ]
+    
+    try:
+        chunks_received = []
+        async for chunk in bot.stream_message(
+            "The payment failed but money was debited", 
+            "context_streaming_user", 
+            conversation_history
+        ):
+            chunks_received.append(chunk)
+            
+        print(f"✅ Context streaming: Received {len(chunks_received)} chunks with conversation history")
+        
+    except Exception as e:
+        print(f"⚠️  Context streaming error: {e}")
+    
+    print("🎉 Streaming tests completed!")
+
 if __name__ == "__main__":
     # Run the comprehensive demo
     asyncio.run(run_comprehensive_demo())
+    
+    # Run streaming tests
+    asyncio.run(test_streaming_functionality())

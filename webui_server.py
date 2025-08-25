@@ -5,10 +5,12 @@ FastAPI server to integrate NPCI Grievance Bot with OpenWebUI
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import asyncio
 import uvicorn
+import json
 from datetime import datetime
 from finance_bot import NPCIGrievanceBot
 
@@ -73,7 +75,7 @@ async def list_models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatRequest):
-    """Handle chat completions from OpenWebUI with context retention"""
+    """Handle chat completions from OpenWebUI with context retention and streaming support"""
     try:
         # Get the last user message
         user_messages = [msg for msg in request.messages if msg.role == "user"]
@@ -90,47 +92,132 @@ async def chat_completions(request: ChatRequest):
                 "content": msg.content
             })
         
-        # Process through NPCI Grievance Bot with context
-        response = await npci_bot.process_message(
-            user_message=last_user_message, 
-            user_id="webui_user",
-            conversation_history=conversation_history
-        )
-        
-        if not response.get("success"):
-            raise HTTPException(status_code=500, detail=response.get("error", "Unknown error"))
-        
-        bot_response = response.get("response", "I'm sorry, I couldn't generate a response.")
-        
-        # Add context information to metadata
-        metadata = response.get("metadata", {})
-        context_messages = metadata.get('context_messages', 1)
-        has_context = metadata.get('has_conversation_history', False)
-        
-        # Add subtle context indicator to response if there's conversation history
-        if has_context and context_messages > 1:
-            # Don't modify the actual response, just log it
-            print(f"🧠 Processing with {context_messages} messages of context")
-        
-        # Format response for OpenWebUI
-        return ChatResponse(
-            id=f"chatcmpl-{int(datetime.now().timestamp())}",
-            created=int(datetime.now().timestamp()),
-            model=request.model,
-            choices=[
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": bot_response
-                    },
-                    "finish_reason": "stop"
-                }
-            ]
-        )
+        # Check if streaming is requested
+        if request.stream:
+            return await handle_streaming_request(request, last_user_message, conversation_history)
+        else:
+            return await handle_non_streaming_request(request, last_user_message, conversation_history)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+async def handle_streaming_request(request: ChatRequest, last_user_message: str, conversation_history: List[Dict]):
+    """Handle streaming chat completions"""
+    
+    async def generate_stream():
+        try:
+            # Stream through NPCI Grievance Bot
+            async for chunk in npci_bot.stream_message(
+                user_message=last_user_message,
+                user_id="webui_user", 
+                conversation_history=conversation_history
+            ):
+                # Format chunk according to OpenAI streaming format
+                chunk_data = {
+                    "id": f"chatcmpl-{int(datetime.now().timestamp())}",
+                    "object": "chat.completion.chunk",
+                    "created": int(datetime.now().timestamp()),
+                    "model": request.model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "content": chunk
+                            },
+                            "finish_reason": None
+                        }
+                    ]
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+            
+            # Send final chunk with finish_reason
+            final_chunk = {
+                "id": f"chatcmpl-{int(datetime.now().timestamp())}",
+                "object": "chat.completion.chunk", 
+                "created": int(datetime.now().timestamp()),
+                "model": request.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": "stop"
+                    }
+                ]
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+            
+        except Exception as e:
+            # Send error in streaming format
+            error_chunk = {
+                "id": f"chatcmpl-{int(datetime.now().timestamp())}",
+                "object": "chat.completion.chunk",
+                "created": int(datetime.now().timestamp()),
+                "model": request.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "content": f"Error: {str(e)}"
+                        },
+                        "finish_reason": "stop"
+                    }
+                ]
+            }
+            yield f"data: {json.dumps(error_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+    
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+        }
+    )
+
+async def handle_non_streaming_request(request: ChatRequest, last_user_message: str, conversation_history: List[Dict]):
+    """Handle non-streaming chat completions (original behavior)"""
+    
+    # Process through NPCI Grievance Bot with context
+    response = await npci_bot.process_message(
+        user_message=last_user_message, 
+        user_id="webui_user",
+        conversation_history=conversation_history
+    )
+    
+    if not response.get("success"):
+        raise HTTPException(status_code=500, detail=response.get("error", "Unknown error"))
+    
+    bot_response = response.get("response", "I'm sorry, I couldn't generate a response.")
+    
+    # Add context information to metadata
+    metadata = response.get("metadata", {})
+    context_messages = metadata.get('context_messages', 1)
+    has_context = metadata.get('has_conversation_history', False)
+    
+    # Add subtle context indicator to response if there's conversation history
+    if has_context and context_messages > 1:
+        # Don't modify the actual response, just log it
+        print(f"🧠 Processing with {context_messages} messages of context")
+    
+    # Format response for OpenWebUI
+    return ChatResponse(
+        id=f"chatcmpl-{int(datetime.now().timestamp())}",
+        created=int(datetime.now().timestamp()),
+        model=request.model,
+        choices=[
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": bot_response
+                },
+                "finish_reason": "stop"
+            }
+        ]
+    )
 
 @app.get("/health")
 async def health_check():

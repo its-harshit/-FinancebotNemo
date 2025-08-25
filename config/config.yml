@@ -102,7 +102,6 @@ rails:
   output:
     flows:
       - self check output
-      - check response quality
       - ensure compliance
       - format response
   
@@ -170,6 +169,9 @@ actions:
 #   - type: file
 #     path: config/kb/
 #     format: text
+
+# Streaming Configuration
+streaming: true
 
 # Tracing Configuration (for monitoring)
 tracing:

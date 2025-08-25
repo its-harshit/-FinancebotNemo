@@ -11,6 +11,7 @@ A comprehensive demonstration of NeMoGuardrails' custom capabilities for a finan
 - **💬 Message Processing**: Intent classification and response generation with guardrails
 - **💳 Account Operations**: Secure account information retrieval with data masking
 - **⏱️ SLA Tracking**: Response time calculation and SLA compliance monitoring
+- **⚡ Real-time Streaming**: Token-by-token response streaming for better user experience
 
 ### NeMoGuardrails Integration
 - **Custom Actions**: Business logic for grievance management and compliance
@@ -79,6 +80,11 @@ Run the interactive demo application:
 python demo.py
 ```
 
+Or try the new **streaming demo**:
+```bash
+python demo_streaming.py
+```
+
 This will present you with a menu-driven interface to explore all features:
 
 1. **🎫 Grievance Management Demo** - Create and manage customer grievances
@@ -92,22 +98,29 @@ This will present you with a menu-driven interface to explore all features:
 
 ### Basic Usage
 ```python
-from finance_bot import FinanceBot
+from finance_bot import NPCIGrievanceBot
 
 # Initialize the bot
-bot = FinanceBot()
+bot = NPCIGrievanceBot()
 
-# Process a customer message
+# Process a customer message (non-streaming)
 response = await bot.process_message(
-    "I have a complaint about my account being frozen",
+    "I have a UPI payment issue",
     user_id="customer123"
 )
+
+# Stream a customer message (new streaming feature)
+async for chunk in bot.stream_message(
+    "My UPI payment failed but money was debited",
+    user_id="customer123"
+):
+    print(chunk, end="", flush=True)
 
 # Create a grievance
 grievance = await bot.create_grievance(
     user_id="customer123",
-    category="account_issue",
-    description="Account frozen without notice",
+    category="upi_transaction_failure",
+    description="UPI payment failed but money was debited",
     priority="high"
 )
 
@@ -125,6 +138,74 @@ pytest test_finance_bot.py -v
 # Run specific test
 pytest test_finance_bot.py::TestFinanceBot::test_grievance_creation -v
 ```
+
+## ⚡ Streaming Features
+
+The bot now supports **real-time streaming responses** based on the [NVIDIA NeMo Guardrails streaming documentation](https://docs.nvidia.com/nemo/guardrails/latest/user-guides/advanced/streaming.html).
+
+### Streaming Capabilities
+- **Token-by-token streaming**: Responses are delivered progressively as they're generated
+- **Context-aware streaming**: Maintains conversation history during streaming
+- **OpenWebUI integration**: Full streaming support for web interfaces
+- **Graceful fallback**: Automatically falls back to non-streaming if needed
+- **Performance optimization**: Users see responses faster with streaming
+
+### Streaming Usage Examples
+
+#### Interactive Chat with Streaming
+```bash
+python chat.py
+# Streaming is enabled by default
+# Use 'stream on/off' to toggle streaming mode
+```
+
+#### Programmatic Streaming
+```python
+# Simple streaming
+async for chunk in bot.stream_message("My UPI payment failed", "user123"):
+    print(chunk, end="", flush=True)
+
+# Streaming with conversation context
+conversation_history = [
+    {"role": "user", "content": "I have a UPI issue"},
+    {"role": "assistant", "content": "I can help with UPI issues."}
+]
+
+async for chunk in bot.stream_message(
+    "The payment failed but money was debited", 
+    "user123", 
+    conversation_history
+):
+    print(chunk, end="", flush=True)
+```
+
+#### Web API Streaming
+```bash
+# Start the streaming-enabled web server
+python webui_server.py
+
+# Test streaming via curl
+curl -X POST "http://localhost:8087/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "npci-grievance-bot",
+    "messages": [{"role": "user", "content": "My UPI payment failed"}],
+    "stream": true
+  }'
+```
+
+### Streaming Demo
+Run the dedicated streaming demo to see all streaming features:
+```bash
+python demo_streaming.py
+```
+
+This demo includes:
+- Basic streaming functionality
+- Performance comparison (streaming vs non-streaming)
+- Context-aware streaming
+- Error handling in streaming mode
+- Interactive streaming chat
 
 ## 🔧 Customization
 

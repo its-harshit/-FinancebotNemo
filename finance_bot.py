@@ -1,9 +1,10 @@
 import asyncio
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, AsyncIterator
 from dotenv import load_dotenv
 from nemoguardrails import LLMRails, RailsConfig
 from nemoguardrails.actions import action
+from nemoguardrails.streaming import StreamingHandler
 
 # Load environment variables
 load_dotenv()
@@ -145,6 +146,131 @@ class NPCIGrievanceBot:
             return result
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    async def stream_message(self, user_message: str, user_id: str = "default_user", conversation_history: List[Dict] = None) -> AsyncIterator[str]:
+        """
+        Stream a user message response through the NPCI Grievance Bot system using optimized NeMo streaming.
+        
+        Args:
+            user_message: The user's input message about NPCI services
+            user_id: Unique identifier for the user
+            conversation_history: Previous messages in the conversation
+            
+        Yields:
+            String chunks of the bot's response as they are generated
+        """
+        try:
+            # Build message history for context
+            messages = []
+            
+            # Add conversation history if provided
+            if conversation_history:
+                # Limit to last 8 messages for context (optimized for streaming performance)
+                recent_history = conversation_history[-8:]
+                messages.extend(recent_history)
+            
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
+            
+            # Use NeMo Guardrails standard streaming API
+            async for chunk in self.rails.stream_async(messages=messages):
+                # Only yield non-empty chunks
+                if chunk and chunk.strip():
+                    yield chunk
+                
+        except Exception as e:
+            # Yield error message as a single chunk
+            yield f"I apologize, but I encountered an error processing your request: {str(e)}"
+    
+    async def stream_message_with_handler(self, user_message: str, user_id: str = "default_user", conversation_history: List[Dict] = None) -> tuple[AsyncIterator[str], Dict[str, Any]]:
+        """
+        Stream a user message response with full response handling.
+        
+        Args:
+            user_message: The user's input message about NPCI services
+            user_id: Unique identifier for the user
+            conversation_history: Previous messages in the conversation
+            
+        Returns:
+            Tuple of (streaming_iterator, final_response_dict)
+        """
+        try:
+            # Build message history for context
+            messages = []
+            
+            # Add conversation history if provided
+            if conversation_history:
+                recent_history = conversation_history[-10:]
+                messages.extend(recent_history)
+            
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
+            
+            # Create streaming handler
+            streaming_handler = StreamingHandler()
+            
+            # Start the generation task
+            async def get_final_response():
+                return await self.rails.generate_async(
+                    messages=messages, 
+                    streaming_handler=streaming_handler
+                )
+            
+            # Create task for final response
+            response_task = asyncio.create_task(get_final_response())
+            
+            # Create async iterator for chunks
+            async def chunk_iterator():
+                async for chunk in streaming_handler:
+                    yield chunk
+            
+            # Wait for final response
+            final_response = await response_task
+            
+            # Process final response similar to process_message
+            if isinstance(final_response, dict):
+                bot_msg = final_response.get("content", "")
+                intent_val = final_response.get("intent", "unknown")
+                sensitive = final_response.get("sensitive_detected", False)
+                disclaimer = final_response.get("requires_disclaimer", False)
+            else:
+                bot_msg = getattr(final_response, "content", "")
+                intent_val = getattr(final_response, "intent", "unknown")
+                sensitive = getattr(final_response, "sensitive_detected", False)
+                disclaimer = getattr(final_response, "requires_disclaimer", False)
+
+            response_dict = {
+                "success": True,
+                "response": bot_msg,
+                "user_id": user_id,
+                "intent": intent_val,
+                "metadata": {
+                    "compliance_checked": True,
+                    "sensitive_info_detected": sensitive,
+                    "requires_disclaimer": disclaimer,
+                    "service_type": "NPCI",
+                    "bot_type": "npci_grievance_bot",
+                    "context_messages": len(messages),
+                    "has_conversation_history": conversation_history is not None and len(conversation_history) > 0,
+                    "streaming_enabled": True
+                }
+            }
+            
+            return chunk_iterator(), response_dict
+            
+        except Exception as e:
+            # Return error iterator and response
+            async def error_iterator():
+                yield f"I apologize, but I encountered an error: {str(e)}"
+            
+            error_response = {
+                "success": False,
+                "error": str(e),
+                "user_id": user_id,
+                "metadata": {"streaming_enabled": True}
+            }
+            
+            return error_iterator(), error_response
 
 # Global bot instance
 npci_bot = NPCIGrievanceBot()

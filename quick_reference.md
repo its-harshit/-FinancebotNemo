@@ -6,8 +6,10 @@
 
 ### **Start the Bot**
 ```bash
-python chat.py                    # Interactive chat
+python chat.py                    # Interactive chat (streaming enabled)
 python demo.py                    # Full demo menu
+python demo_streaming.py          # Streaming-specific demos
+python webui_server.py            # Web API with streaming support
 ```
 
 ### **Test Commands**
@@ -84,10 +86,17 @@ print(result)
 
 ## 📊 **Performance Expectations**
 
+### **Non-Streaming Mode**
 - **Response Time**: 2-3 seconds total
 - **LLM Calls**: 3 per message (input check, main, output check)
 - **Cost**: ~$0.01 per message
 - **Accuracy**: >95% for financial domain queries
+
+### **Streaming Mode** ⚡
+- **Time to First Chunk**: 0.5-1 second
+- **Progressive Delivery**: Tokens stream as generated
+- **User Experience**: Faster perceived response time
+- **Fallback**: Automatic fallback to non-streaming if needed
 
 ## 🚨 **Common Issues & Solutions**
 
@@ -115,6 +124,7 @@ print(result)
 - Financial domain customization
 - Basic security layers
 - Comprehensive testing
+- Real-time streaming support
 
 ### **🔄 In Progress**
 - Llama Guard API integration

@@ -1,15 +1,6 @@
 # Output Rails - Response Quality and Compliance Checking
 # These flows validate and format bot responses
 
-define flow check response quality
-  """Ensure response meets quality standards"""
-  $quality_check = execute check_response_quality(bot_response=$bot_response)
-  
-  if not $quality_check.meets_standards
-    # Regenerate response with quality improvements
-    $improved_response = execute improve_response_quality(original_response=$bot_response, quality_issues=$quality_check.issues)
-    $bot_response = $improved_response.content
-
 define flow ensure compliance
   """Ensure response complies with NPCI service policies and regulations"""
   $compliance_check = execute check_compliance(bot_response=$bot_response)
