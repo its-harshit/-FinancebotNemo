@@ -1,7 +1,3 @@
-# NeMo Guardrails Configuration for FinanceBot
-# Following the official configuration guide structure
-
-# LLM Configuration
 models:
   # - type: main
   #   engine: openai
@@ -13,20 +9,32 @@ models:
   #     frequency_penalty: 0.0
   #     presence_penalty: 0.0
 
-  - type: main
-    engine: openai
-    # base_url: "http://127.0.0.1:8000/" 
-    model: "NPCI_Greviance"
-    parameters:
-      base_url: http://127.0.0.1:8000/v1
-      api_key: "api-key"  
-
   # - type: validator
   #   engine: openai
   #   model: gpt-3.5-turbo-1106
   #   parameters:
   #     temperature: 0.0    # Deterministic for safety
   #     max_tokens: 5       # Just "Yes" or "No"
+
+  - type: main
+    engine: openai
+    model: "NPCI_Greviance"
+    parameters:
+      base_url: http://127.0.0.1:8000/v1
+      api_key: "api-key"
+      temperature: 0.1
+      max_tokens: 1000
+
+  - type: validator
+    engine: openai
+    model: "NPCI_Greviance"
+    parameters:
+      base_url: http://127.0.0.1:8000/v1
+      api_key: "api-key"
+      temperature: 0.0
+      max_tokens: 5
+
+
 
 
 # Embedding model for knowledge base (if using RAG)
@@ -99,8 +107,8 @@ rails:
 # Custom Prompts for Self-Check Rails
 prompts:
   - task: self_check_input
-    # models: [validator]
-    models: [main]
+    models: [validator]
+    # models: [main]
     content: |
       Your task is to check if the user message below complies with the policy for a financial services chatbot.
       
@@ -117,8 +125,8 @@ prompts:
       Answer:
 
   - task: self_check_output
-    # models: [validator]
-    models: [main]
+    models: [validator]
+    # models: [main]
     content: |
       Your task is to check if the bot message below complies with financial services policies.
       
