@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 from dotenv import load_dotenv
 from nemoguardrails import LLMRails, RailsConfig
 from nemoguardrails.actions import action
@@ -15,22 +15,33 @@ class NPCIGrievanceBot:
         self.config = RailsConfig.from_path("config")
         self.rails = LLMRails(config=self.config)
         
-    async def process_message(self, user_message: str, user_id: str = "default_user") -> Dict[str, Any]:
+    async def process_message(self, user_message: str, user_id: str = "default_user", conversation_history: List[Dict] = None) -> Dict[str, Any]:
         """
-        Process a user message through the NPCI Grievance Bot system.
+        Process a user message through the NPCI Grievance Bot system with context retention.
         
         Args:
             user_message: The user's input message about NPCI services
             user_id: Unique identifier for the user
+            conversation_history: Previous messages in the conversation
             
         Returns:
             Dictionary containing the bot's response and NPCI service metadata
         """
         try:
-            # Process the message through NeMoGuardrails
-            raw = await self.rails.generate_async(
-                messages=[{"role": "user", "content": user_message}]
-            )
+            # Build message history for context
+            messages = []
+            
+            # Add conversation history if provided
+            if conversation_history:
+                # Limit to last 10 messages for context (prevent token overflow)
+                recent_history = conversation_history[-10:]
+                messages.extend(recent_history)
+            
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
+            
+            # Process through NeMoGuardrails with full context
+            raw = await self.rails.generate_async(messages=messages)
 
             # Depending on NeMoGuardrails version, generate_async may return
             # a dict or an object with .content
@@ -55,7 +66,9 @@ class NPCIGrievanceBot:
                     "sensitive_info_detected": sensitive,
                     "requires_disclaimer": disclaimer,
                     "service_type": "NPCI",
-                    "bot_type": "npci_grievance_bot"
+                    "bot_type": "npci_grievance_bot",
+                    "context_messages": len(messages),
+                    "has_conversation_history": conversation_history is not None and len(conversation_history) > 0
                 }
             }
             
@@ -156,9 +169,25 @@ async def main():
     user_message = "My UPI payment failed but money was debited. Transaction ref: 304912345678"
     response = await npci_bot.process_message(user_message, "user123")
     if response.get("success") and "response" in response:
-        print(f"Bot Response: {response['response']}")
+        print(f"Bot Response: {response['response'][:200]}...")
     else:
         print(f"Bot Error: {response.get('error', 'Unknown error')}")
+    
+    # Test 2b: Context retention test
+    print("\n🧠 Test 2b: Context retention test")
+    conversation_history = [
+        {"role": "user", "content": "My UPI payment failed but money was debited"},
+        {"role": "assistant", "content": "I understand your UPI payment issue. Let me help you resolve this."}
+    ]
+    followup_message = "It was for 500 rupees"
+    context_response = await npci_bot.process_message(followup_message, "user123", conversation_history)
+    if context_response.get("success"):
+        metadata = context_response.get("metadata", {})
+        print(f"Context Messages: {metadata.get('context_messages', 0)}")
+        print(f"Has Context: {metadata.get('has_conversation_history', False)}")
+        print(f"Context Response: {context_response['response'][:200]}...")
+    else:
+        print(f"Context Error: {context_response.get('error', 'Unknown error')}")
     
     # Test 3: UPI specific issue handling
     print("\n🔧 Test 3: UPI issue handling")

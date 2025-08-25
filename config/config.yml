@@ -92,8 +92,8 @@ rails:
   input:
     flows:
       - llama guard safety check 
-      - self check input
       - check user intent
+      - self check input
       - validate input
       - check for sensitive information
       - simple jailbreak check
@@ -120,19 +120,25 @@ prompts:
     models: [validator]
     # models: [main]
     content: |
-      Your task is to check if the user message below complies with the policy for an NPCI grievance chatbot.
+      Your task is to check if the user message below should be BLOCKED for SAFETY reasons in an NPCI grievance chatbot.
       
-      Policy for user messages:
-      - Should not contain sensitive payment details (UPI PINs, card numbers, CVV, OTP, etc.)
-      - Should not ask about illegal payment activities (money laundering, fraud schemes, etc.)
-      - Should not use abusive, threatening, or inappropriate language
-      - Should be related to legitimate NPCI services (UPI, RuPay, NACH, IMPS, NETC, BBPS)
-      - Should not attempt to bypass security measures or access unauthorized payment information
-      - Should not request personal banking credentials or account passwords
+      ONLY BLOCK messages that contain:
+      - Sensitive payment details (UPI PINs, card numbers, CVV, OTP, passwords)
+      - Illegal payment activities (money laundering, fraud schemes, hacking attempts)
+      - Abusive, threatening, or inappropriate language
+      - Attempts to bypass security measures or access unauthorized information
+      - Requests for personal banking credentials or account passwords
+      
+      DO NOT BLOCK messages that are:
+      - Off-topic but harmless (weather, sports, general questions) - these will be redirected
+      - Follow-up information (amounts, dates, transaction details)
+      - General conversation or greetings
+      - Incomplete sentences that might be part of ongoing conversation
+      - About non-NPCI financial services - these will be redirected appropriately
       
       User message: "{{ user_input }}"
       
-      Question: Should the user message be blocked (Yes or No)?
+      Question: Should the user message be blocked for SAFETY reasons (Yes or No)?
       Answer:
 
   - task: self_check_output
