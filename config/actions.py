@@ -7,11 +7,44 @@ import os
 
 # Mock database for demonstration
 grievances_db = []
-accounts_db = {
-    "ACC001": {"name": "John Doe", "balance": 5000, "status": "active"},
-    "ACC002": {"name": "Jane Smith", "balance": 2500, "status": "active"},
-    "ACC003": {"name": "Bob Wilson", "balance": 0, "status": "suspended"}
+
+# NPCI Service Information Database
+npci_services_db = {
+    "UPI": {
+        "description": "Unified Payments Interface - Instant payment system",
+        "common_issues": ["failed_transaction", "money_debited_but_payment_failed", "upi_id_issues", "transaction_limit_exceeded"]
+    },
+    "RuPay": {
+        "description": "India's domestic payment network for cards",
+        "common_issues": ["card_not_working", "transaction_declined", "international_usage", "reward_points"]
+    },
+    "NACH": {
+        "description": "National Automated Clearing House for bulk payments",
+        "common_issues": ["mandate_failure", "payment_bounce", "mandate_cancellation", "auto_debit_issues"]
+    },
+    "IMPS": {
+        "description": "Immediate Payment Service for instant money transfer",
+        "common_issues": ["transfer_failed", "beneficiary_not_added", "transaction_limit", "service_unavailable"]
+    },
+    "NETC": {
+        "description": "National Electronic Toll Collection (FASTag)",
+        "common_issues": ["fastag_not_working", "double_deduction", "balance_issues", "blacklist_issues"]
+    },
+    "BBPS": {
+        "description": "Bharat Bill Payment System",
+        "common_issues": ["bill_payment_failed", "duplicate_payment", "biller_not_available", "receipt_issues"]
+    }
 }
+
+# NPCI Mandate Types
+mandate_types = {
+    "e_NACH": "Electronic National Automated Clearing House",
+    "UPI_AutoPay": "UPI Recurring Payments",
+    "SI": "Standing Instructions"
+}
+
+# Legacy accounts database - not used for NPCI services
+accounts_db = {}
 
 @action()
 async def llama_guard_api_check(user_message: str) -> Dict:
@@ -149,24 +182,47 @@ async def llama_guard_with_fallback(user_message: str) -> Dict:
     }
 
 @action()
-async def create_grievance(user_id: str, category: str, description: str, priority: str = "medium") -> Dict:
-    """Create a new grievance ticket for the user."""
-    grievance_id = f"GRV{len(grievances_db) + 1:03d}"
+async def create_grievance(user_id: str, category: str, description: str, priority: str = "medium", service_type: str = "general") -> Dict:
+    """Create a new NPCI grievance ticket for the user."""
+    grievance_id = f"NPCI{len(grievances_db) + 1:06d}"
+    
+    # NPCI-specific grievance categories
+    valid_categories = [
+        "upi_transaction_failure", "upi_money_debited", "upi_id_issues", "upi_limit_exceeded",
+        "rupay_card_not_working", "rupay_transaction_declined", "rupay_reward_issues",
+        "nach_mandate_failure", "nach_payment_bounce", "nach_auto_debit_issues",
+        "imps_transfer_failed", "imps_beneficiary_issues", "imps_limit_issues",
+        "netc_fastag_issues", "netc_double_deduction", "netc_balance_issues",
+        "bbps_payment_failed", "bbps_duplicate_payment", "bbps_receipt_issues",
+        "general_npci_query", "technical_issues", "other"
+    ]
+    
+    # Default to general if invalid category
+    if category not in valid_categories:
+        category = "general_npci_query"
+    
     grievance = {
         "id": grievance_id,
         "user_id": user_id,
         "category": category,
+        "service_type": service_type,
         "description": description,
         "priority": priority,
         "status": "open",
         "created_at": datetime.now().isoformat(),
-        "assigned_to": None
+        "assigned_to": "NPCI_Support_Team",
+        "expected_resolution": "7-10 working days",
+        "escalation_level": 1
     }
     grievances_db.append(grievance)
+    
     return {
         "success": True,
         "grievance_id": grievance_id,
-        "message": f"Grievance created successfully with ID: {grievance_id}"
+        "service_type": service_type,
+        "expected_resolution": "7-10 working days",
+        "message": f"NPCI grievance created successfully with ID: {grievance_id}. Expected resolution: 7-10 working days.",
+        "next_steps": "Please save this grievance ID for future reference. You can also contact your bank with this ID."
     }
 
 @action()
@@ -291,48 +347,75 @@ async def simple_jailbreak_check(user_message: str) -> Dict:
 
 @action()
 async def classify_user_intent(user_message: str) -> Dict:
-    """Classify the user's intent based on their message with off-topic detection."""
+    """Classify the user's intent based on their message with NPCI service focus."""
     user_message_lower = user_message.lower()
     
-    # Off-topic/non-financial keywords (should be redirected)
-    off_topic_keywords = [
-        "llm", "ai", "artificial intelligence", "machine learning", "chatbot", 
-        "weather", "sports", "politics", "entertainment", "personal life", 
-        "philosophy", "religion", "what is like to be", "how does it feel",
-        "your experience", "your thoughts", "your opinion"
+    # Off-topic/non-NPCI keywords (should be redirected)
+    # Using word boundaries to prevent false matches
+    import re
+    off_topic_patterns = [
+        r'\bllm\b', r'\bai\b', r'\bartificial intelligence\b', r'\bmachine learning\b', r'\bchatbot\b', 
+        r'\bweather\b', r'\bsports\b', r'\bpolitics\b', r'\bentertainment\b', r'\bpersonal life\b', 
+        r'\bphilosophy\b', r'\breligion\b', r'\bwhat is like to be\b', r'\bhow does it feel\b',
+        r'\byour experience\b', r'\byour thoughts\b', r'\byour opinion\b', r'\bloan\b', r'\bcredit card bill\b', 
+        r'\binvestment\b', r'\binsurance\b', r'\bmutual fund\b', r'\bstock\b', r'\bforex\b'
     ]
     
-    # Grievance/complaint keywords
-    grievance_keywords = ["complaint", "issue", "problem", "grievance", "dispute", "unhappy", "dissatisfied", "frozen", "blocked", "error"]
+    # UPI-related keywords
+    upi_keywords = ["upi", "unified payment", "payment failed", "money debited", "upi id", "upi pin", "phonepe", "gpay", "paytm", "bhim"]
     
-    # Account inquiry keywords  
-    account_keywords = ["balance", "account", "statement", "transaction", "deposit", "withdrawal", "transfer"]
+    # RuPay-related keywords  
+    rupay_keywords = ["rupay", "debit card", "atm card", "card not working", "card declined", "card blocked"]
     
-    # Financial service keywords
-    financial_keywords = ["loan", "credit", "mortgage", "investment", "savings", "insurance", "fee", "rate", "bank", "finance", "payment", "card"]
+    # NACH/Mandate keywords
+    mandate_keywords = ["nach", "mandate", "auto debit", "emi", "autopay", "standing instruction", "si", "recurring payment"]
     
-    # Banking hours/contact keywords
-    contact_keywords = ["hours", "contact", "phone", "call", "reach", "location", "branch", "address"]
+    # IMPS keywords
+    imps_keywords = ["imps", "immediate payment", "instant transfer", "money transfer", "beneficiary"]
+    
+    # NETC/FASTag keywords
+    netc_keywords = ["fastag", "netc", "toll", "toll payment", "blacklist", "recharge"]
+    
+    # BBPS keywords
+    bbps_keywords = ["bbps", "bill payment", "utility bill", "electricity bill", "water bill", "gas bill"]
+    
+    # General grievance/complaint keywords
+    grievance_keywords = ["complaint", "issue", "problem", "grievance", "dispute", "unhappy", "dissatisfied", "error", "failed", "not working"]
+    
+    # NPCI service inquiry keywords
+    npci_service_keywords = ["npci", "what is npci", "transaction limit", "service hours", "contact", "helpline", "support"]
     
     # Check for off-topic first (IMPORTANT: This goes first!)
-    if any(keyword in user_message_lower for keyword in off_topic_keywords):
+    if any(re.search(pattern, user_message_lower) for pattern in off_topic_patterns):
         category = "off_topic"
         confidence = 0.95
-    elif any(keyword in user_message_lower for keyword in grievance_keywords):
-        category = "grievance"
+    elif any(keyword in user_message_lower for keyword in upi_keywords):
+        category = "upi_related"
         confidence = 0.9
-    elif any(keyword in user_message_lower for keyword in account_keywords):
-        category = "account_inquiry"
+    elif any(keyword in user_message_lower for keyword in rupay_keywords):
+        category = "rupay_related"
+        confidence = 0.9
+    elif any(keyword in user_message_lower for keyword in mandate_keywords):
+        category = "mandate_related"
+        confidence = 0.9
+    elif any(keyword in user_message_lower for keyword in imps_keywords):
+        category = "imps_related"
+        confidence = 0.9
+    elif any(keyword in user_message_lower for keyword in netc_keywords):
+        category = "netc_related"
+        confidence = 0.9
+    elif any(keyword in user_message_lower for keyword in bbps_keywords):
+        category = "bbps_related"
+        confidence = 0.9
+    elif any(keyword in user_message_lower for keyword in grievance_keywords):
+        category = "general_grievance"
         confidence = 0.8
-    elif any(keyword in user_message_lower for keyword in financial_keywords):
-        category = "financial_service"
-        confidence = 0.8
-    elif any(keyword in user_message_lower for keyword in contact_keywords):
-        category = "general_support"
+    elif any(keyword in user_message_lower for keyword in npci_service_keywords):
+        category = "npci_inquiry"
         confidence = 0.8
     else:
-        # If no clear category, assume general support but flag for review
-        category = "general_support"
+        # If no clear category, assume general NPCI support
+        category = "general_npci_support"
         confidence = 0.5  # Lower confidence for unclear messages
     
     return {
@@ -343,9 +426,9 @@ async def classify_user_intent(user_message: str) -> Dict:
 
 @action()
 async def handle_off_topic_request(user_message: str) -> Dict:
-    """Handle off-topic requests by redirecting to financial services."""
+    """Handle off-topic requests by redirecting to NPCI services."""
     return {
-        "response": "I'm FinanceBot, specialized in helping with banking and financial services. I can assist you with account inquiries, grievances, loan information, and other banking needs. How can I help you with your financial services today?",
+        "response": "I'm NPCI Grievance Bot, specialized in helping with NPCI services like UPI, RuPay, NACH, IMPS, FASTag (NETC), and BBPS. I can assist you with payment issues, transaction problems, mandate management, and general NPCI service queries. How can I help you with your NPCI-related needs today?",
         "redirect_successful": True
     }
 
@@ -466,26 +549,173 @@ async def format_bot_response(response: str, user_context: Optional[Dict] = None
 
 @action()
 async def process_general_inquiry(user_message: str, user_context: Optional[Dict] = None) -> Dict:
-    """Process general customer support inquiries."""
+    """Process general NPCI service inquiries."""
     response_templates = {
-        "hours": "Our customer service is available Monday through Friday, 9 AM to 6 PM EST. For urgent matters outside these hours, please visit our website or use our mobile app.",
-        "fees": "For detailed information about fees and charges, please refer to your account agreement or contact us directly. Fee structures vary by account type and services used.",
-        "contact": "You can reach us by phone at 1-800-FINANCE, through our website chat, or by visiting any of our branch locations. Our customer service team is ready to assist you.",
-        "default": "Thank you for your inquiry. I'm here to help with your banking needs. Could you please provide more specific details about what you'd like to know?"
+        "hours": "NPCI customer support operates through participating banks and service providers. For UPI issues, contact your bank's customer service. For general NPCI queries, visit npci.org.in or call the NPCI helpline.",
+        "fees": "NPCI services like UPI are generally free for person-to-person transactions. Merchant transaction fees vary by bank and payment method. Check with your bank for specific fee structures.",
+        "contact": "For NPCI-related issues: Visit npci.org.in, contact your bank's customer service, or reach out to your payment app provider. Each NPCI service has dedicated support channels.",
+        "upi_limits": "UPI transaction limits: ₹1 lakh per transaction for P2P, ₹2 lakh for P2M. Daily limits may vary by bank. Check with your bank for specific limits.",
+        "default": "Thank you for your NPCI-related inquiry. I can help with UPI, RuPay, NACH, IMPS, FASTag, and BBPS issues. Could you please specify which NPCI service you need assistance with?"
     }
     
     user_message_lower = user_message.lower()
     
-    if any(word in user_message_lower for word in ["hours", "time", "when", "open"]):
+    if any(word in user_message_lower for word in ["hours", "time", "when", "support"]):
         response = response_templates["hours"]
     elif any(word in user_message_lower for word in ["fee", "charge", "cost", "price"]):
         response = response_templates["fees"]
-    elif any(word in user_message_lower for word in ["contact", "phone", "call", "reach"]):
+    elif any(word in user_message_lower for word in ["contact", "phone", "call", "reach", "helpline"]):
         response = response_templates["contact"]
+    elif any(word in user_message_lower for word in ["limit", "maximum", "daily", "transaction limit"]):
+        response = response_templates["upi_limits"]
     else:
         response = response_templates["default"]
     
     return {
         "message": response,
-        "category": "general_inquiry"
+        "category": "npci_general_inquiry"
+    }
+
+# NPCI-Specific Actions
+
+@action()
+async def handle_upi_grievance(issue_type: str, transaction_ref: str = "", description: str = "") -> Dict:
+    """Handle UPI-specific grievances and provide resolution guidance."""
+    upi_resolution_steps = {
+        "failed_transaction": {
+            "steps": [
+                "Check if money was debited from your account",
+                "Note down the UPI transaction reference ID",
+                "Contact your bank's customer service with the UPI Ref ID",
+                "If not resolved in 24 hours, escalate to banking ombudsman",
+                "File complaint on NPCI website if needed"
+            ],
+            "timeline": "T+1 working day for auto-reversal, T+7 for manual resolution",
+            "escalation": "Contact RBI Banking Ombudsman if not resolved in 30 days"
+        },
+        "money_debited": {
+            "steps": [
+                "Check your bank account statement for debit entry",
+                "Verify recipient's account status",
+                "Contact your bank with transaction details",
+                "File grievance with UPI Ref ID: {transaction_ref}",
+                "Monitor for auto-reversal within T+1 working day"
+            ],
+            "timeline": "Auto-reversal within T+1, manual resolution within T+7",
+            "escalation": "NPCI dispute resolution if bank doesn't resolve"
+        },
+        "upi_id_issues": {
+            "steps": [
+                "Verify UPI ID format (name@bankname)",
+                "Check if recipient UPI ID is active",
+                "Try transaction with different UPI ID",
+                "Contact your UPI app support team",
+                "Register new UPI ID if current one is blocked"
+            ],
+            "timeline": "Immediate for ID verification, 1-2 days for reactivation",
+            "escalation": "Contact bank if UPI ID registration fails"
+        }
+    }
+    
+    resolution = upi_resolution_steps.get(issue_type, upi_resolution_steps["failed_transaction"])
+    
+    # Format steps with transaction reference if provided
+    formatted_steps = []
+    for step in resolution["steps"]:
+        if "{transaction_ref}" in step and transaction_ref:
+            formatted_steps.append(step.format(transaction_ref=transaction_ref))
+        else:
+            formatted_steps.append(step)
+    
+    return {
+        "resolution_steps": formatted_steps,
+        "timeline": resolution["timeline"],
+        "escalation_path": resolution["escalation"],
+        "service_type": "UPI",
+        "issue_category": issue_type,
+        "reference_id": transaction_ref
+    }
+
+@action()
+async def handle_mandate_issues(mandate_type: str, issue_description: str = "") -> Dict:
+    """Handle NPCI mandate-related issues (e-NACH, UPI AutoPay, etc.)."""
+    mandate_solutions = {
+        "e_NACH": {
+            "common_issues": {
+                "mandate_rejection": "Verify bank account details, ensure sufficient balance, check signature match",
+                "auto_debit_failure": "Confirm account has adequate balance, verify mandate is active",
+                "mandate_cancellation": "Contact biller to cancel, ensure written confirmation, monitor next billing cycle"
+            },
+            "contact_info": "Contact your bank's NACH support team or biller's customer service"
+        },
+        "UPI_AutoPay": {
+            "common_issues": {
+                "autopay_not_working": "Check UPI app settings, verify mandate is active, ensure sufficient balance",
+                "mandate_creation_failed": "Verify UPI PIN, check daily transaction limits, retry after 30 minutes",
+                "unauthorised_deduction": "Immediately contact bank, file complaint with UPI Ref ID, review all active mandates"
+            },
+            "contact_info": "Contact your UPI app customer support or issuing bank"
+        },
+        "SI": {
+            "common_issues": {
+                "standing_instruction_bounce": "Ensure account has sufficient balance before debit date",
+                "si_not_executed": "Verify SI is active, check account status, contact bank if issue persists",
+                "duplicate_deduction": "Contact bank immediately, provide transaction details, file written complaint"
+            },
+            "contact_info": "Contact your bank's customer service for Standing Instruction issues"
+        }
+    }
+    
+    mandate_info = mandate_solutions.get(mandate_type, mandate_solutions["e_NACH"])
+    
+    return {
+        "mandate_type": mandate_type,
+        "common_solutions": mandate_info["common_issues"],
+        "contact_support": mandate_info["contact_info"],
+        "general_advice": "Always keep mandate confirmation receipts and monitor account statements regularly",
+        "escalation": "File complaint with RBI Banking Ombudsman if bank doesn't resolve within 30 days"
+    }
+
+@action()
+async def provide_npci_faq(query_type: str) -> Dict:
+    """Provide answers to frequently asked questions about NPCI services."""
+    npci_faqs = {
+        "what_is_npci": {
+            "answer": "National Payments Corporation of India (NPCI) is the umbrella organization for operating retail payments and settlement systems in India. It operates UPI, RuPay, NACH, IMPS, and other digital payment systems.",
+            "services": ["UPI", "RuPay", "NACH", "IMPS", "NETC (FASTag)", "BBPS", "NFS", "RuPay Credit Cards"]
+        },
+        "upi_safety": {
+            "answer": "UPI is safe with multiple security layers including 2-factor authentication, encrypted data transmission, and transaction limits. Never share your UPI PIN, always verify recipient details, and use authorized UPI apps only.",
+            "safety_tips": ["Never share UPI PIN", "Verify recipient before sending money", "Use only bank-approved UPI apps", "Check transaction details before confirming"]
+        },
+        "rupay_vs_visa": {
+            "answer": "RuPay is India's domestic card payment network, accepted across India with lower processing fees. It offers better integration with government schemes and digital payment initiatives compared to international networks.",
+            "advantages": ["Lower merchant fees", "Government scheme integration", "Wide acceptance in India", "Enhanced security features"]
+        },
+        "transaction_limits": {
+            "answer": "UPI limits: ₹1 lakh per transaction (P2P), ₹2 lakh (P2M). IMPS: ₹5 lakh per transaction. Limits may vary by bank and customer profile.",
+            "limit_details": {
+                "UPI P2P": "₹1,00,000 per transaction",
+                "UPI P2M": "₹2,00,000 per transaction", 
+                "IMPS": "₹5,00,000 per transaction",
+                "NACH": "No upper limit (as per mandate)"
+            }
+        },
+        "failed_transaction": {
+            "answer": "Failed transactions are usually auto-reversed within T+1 working day. If money is debited but transaction failed, contact your bank with transaction reference ID immediately.",
+            "steps": ["Check account statement", "Note transaction reference ID", "Contact bank customer service", "Wait for auto-reversal (T+1)", "Escalate if not resolved in 7 days"]
+        }
+    }
+    
+    faq_response = npci_faqs.get(query_type, {
+        "answer": "For specific NPCI service queries, please visit npci.org.in or contact your bank's customer service.",
+        "additional_info": "You can also reach out to your payment app's customer support for service-specific issues."
+    })
+    
+    return {
+        "query_type": query_type,
+        "answer": faq_response.get("answer", ""),
+        "additional_details": faq_response,
+        "official_website": "https://www.npci.org.in",
+        "customer_portal": "https://www.npci.org.in/grievance-portal"
     }

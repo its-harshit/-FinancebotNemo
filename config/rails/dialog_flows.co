@@ -1,38 +1,48 @@
-# Dialog Rails - Conversation Management Flows
-# These flows manage different types of customer interactions
+# Dialog Rails - NPCI Service Conversation Management Flows
+# These flows manage different types of NPCI customer interactions
 
 define flow grievance management flow
-  """Handle customer grievances and complaints"""
-  bot "I understand you have a concern that needs to be addressed. I'm here to help you resolve this issue."
+  """Handle NPCI service grievances and complaints"""
+  bot "I understand you have a concern about an NPCI service that needs to be addressed. I'm here to help you resolve this issue."
   
-  # Create grievance ticket
-  $grievance = execute create_grievance(user_id="default_user", category="general", description=$user_message, priority="medium")
+  # Create NPCI grievance ticket
+  $grievance = execute create_grievance(user_id="default_user", category="general_npci_query", description=$user_message, priority="medium", service_type="general")
   
   if $grievance.success
-    bot "I've created a grievance ticket for you with ID: {$grievance.grievance_id}. Our team will review your concern and respond within our standard timeframe. You can reference this ID for any follow-up inquiries."
+    bot "I've created an NPCI grievance ticket for you with ID: {$grievance.grievance_id}. Expected resolution time: {$grievance.expected_resolution}. {$grievance.next_steps}"
   else
-    bot "I apologize, but there was an issue creating your grievance ticket. Please contact our support team directly for immediate assistance."
+    bot "I apologize, but there was an issue creating your grievance ticket. Please visit npci.org.in or contact your bank's customer service for immediate assistance."
 
-define flow account inquiry flow
-  """Handle account-related inquiries securely"""
-  bot "I can help you with your account inquiry. For security purposes, I'll need to verify some information."
+define flow upi specific flow
+  """Handle UPI-specific issues and provide detailed guidance"""
+  bot "I can help you with your UPI-related issue. Let me provide specific guidance for UPI problems."
   
-  # Retrieve account information (simplified)
-  $account_info = execute get_account_info(account_id="ACC001")
+  # Handle UPI grievance with specific guidance
+  $upi_help = execute handle_upi_grievance(issue_type="failed_transaction", description=$user_message)
   
-  if $account_info.success
-    bot "I found account information. For security, I can only share limited details. Please contact us directly for complete account information."
-  else
-    bot "I couldn't locate the account. Please verify your account ID and try again, or contact our support team for assistance."
+  bot "Here are the steps to resolve your UPI issue:"
+  bot "Timeline: {$upi_help.timeline}"
+  bot "If the issue persists: {$upi_help.escalation_path}"
+
+define flow mandate inquiry flow
+  """Handle NPCI mandate-related inquiries (e-NACH, UPI AutoPay, etc.)"""
+  bot "I can help you with mandate-related issues. Mandates include e-NACH, UPI AutoPay, and Standing Instructions."
+  
+  # Handle mandate issues
+  $mandate_help = execute handle_mandate_issues(mandate_type="e_NACH", issue_description=$user_message)
+  
+  bot "For mandate issues: {$mandate_help.general_advice}"
+  bot "Contact: {$mandate_help.contact_support}"
+  bot "Escalation: {$mandate_help.escalation}"
 
 define flow general support flow
-  """Handle general customer support inquiries"""
-  bot "I'm here to help with your inquiry. Let me provide you with the information you need."
+  """Handle general NPCI service inquiries and FAQs"""
+  bot "I'm here to help with your NPCI service inquiry. Let me provide you with the information you need."
   
-  # Process general inquiry
+  # Process general NPCI inquiry
   $support_response = execute process_general_inquiry(user_message=$user_message)
   
   bot $support_response.message
   
   # Offer additional assistance
-  bot "Is there anything else I can help you with today?"
+  bot "Is there anything else I can help you with regarding NPCI services today?"

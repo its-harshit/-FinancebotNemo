@@ -11,7 +11,7 @@ define flow check response quality
     $bot_response = $improved_response.content
 
 define flow ensure compliance
-  """Ensure response complies with financial regulations"""
+  """Ensure response complies with NPCI service policies and regulations"""
   $compliance_check = execute check_compliance(bot_response=$bot_response)
   
   if $compliance_check.requires_disclaimer
@@ -19,7 +19,7 @@ define flow ensure compliance
   
   if not $compliance_check.is_compliant
     bot refuse to respond
-    bot "I apologize, but I cannot provide that information as it may not comply with our regulatory requirements. Please contact our compliance team for assistance with this matter."
+    bot "I apologize, but I cannot provide that information as it may not comply with NPCI service policies. Please visit npci.org.in or contact your bank for assistance with this matter."
     stop
 
 define flow format response

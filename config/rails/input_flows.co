@@ -29,11 +29,11 @@ define flow validate input
     stop
 
 define flow check for sensitive information
-  """Detect and handle sensitive information in user input"""
+  """Detect and handle sensitive payment information in user input"""
   $sensitive_check = execute check_for_sensitive_info(user_message=$user_message)
   
   if $sensitive_check.contains_sensitive_data
-    bot "I notice your message may contain sensitive information like account numbers or personal details. For your security, please avoid sharing such information in chat. I can still help you with your request using your account ID or other non-sensitive identifiers."
+    bot "I notice your message may contain sensitive payment information like UPI PINs, card numbers, or OTPs. For your security, please avoid sharing such information in chat. I can still help you with your NPCI service request using transaction reference IDs or other non-sensitive identifiers."
     stop
 
 define flow simple jailbreak check
@@ -41,5 +41,5 @@ define flow simple jailbreak check
   $check = execute simple_jailbreak_check(user_message=$user_message)
   
   if $check.is_jailbreak
-    bot "I'm designed to help with banking and financial services. Please ask questions related to your accounts or banking needs."
+    bot "I'm designed to help with NPCI services like UPI, RuPay, NACH, IMPS, FASTag, and BBPS. Please ask questions related to these payment services or submit grievances."
     stop
